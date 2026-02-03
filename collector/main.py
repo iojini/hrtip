@@ -2,7 +2,7 @@
 Main collector - orchestrates all threat intel feeds
 """
 
-from collector import urlhaus, feodotracker, threatfox, openphish, alienvault
+from collector import urlhaus, feodotracker, threatfox, openphish, alienvault, malwarebazaar
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,10 +18,13 @@ def collect_all():
     
     all_iocs = []
     
-    # Free feeds (no API key required)
+    # Abuse.ch feeds
     all_iocs.extend(urlhaus.collect())
     all_iocs.extend(feodotracker.collect())
     all_iocs.extend(threatfox.collect())
+    all_iocs.extend(malwarebazaar.collect())
+    
+    # Other free feeds
     all_iocs.extend(openphish.collect())
     
     # API key required (will skip gracefully if not configured)
