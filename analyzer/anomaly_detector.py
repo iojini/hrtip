@@ -15,10 +15,6 @@ class AnomalyDetector:
     """Detects anomalous IOCs and network activity"""
     
     def __init__(self, contamination: float = 0.1):
-        """
-        Args:
-            contamination: Expected proportion of anomalies (0.0 to 0.5)
-        """
         self.model = IsolationForest(
             contamination=contamination,
             random_state=42,
@@ -33,9 +29,9 @@ class AnomalyDetector:
         features = []
         
         # Calculate global statistics for relative features
-        all_ports = [ioc.get("port", 0) for ioc in iocs if ioc.get("port")]
+        all_ports = [ioc.get("port") for ioc in iocs if ioc.get("port") is not None]
         port_mean = np.mean(all_ports) if all_ports else 0
-        port_std = np.std(all_ports) if all_ports else 1
+        port_std = np.std(all_ports) if all_ports and len(all_ports) > 1 else 1
         
         source_counts = Counter(ioc.get("source", "unknown") for ioc in iocs)
         total_iocs = len(iocs)
@@ -46,18 +42,18 @@ class AnomalyDetector:
             # 1. Source rarity (rare sources might be anomalous)
             source = ioc.get("source", "unknown")
             source_freq = source_counts.get(source, 1) / total_iocs
-            feature_vec.append(1 - source_freq)  # Rarer = higher value
+            feature_vec.append(1 - source_freq)
             
             # 2. Port anomaly (unusual ports)
-            port = ioc.get("port", 0)
-            if port and port_std > 0:
+            port = ioc.get("port")
+            if port is not None and port_std > 0:
                 port_zscore = abs(port - port_mean) / port_std
                 feature_vec.append(min(port_zscore, 5) / 5)
             else:
                 feature_vec.append(0)
             
             # 3. High port number (ephemeral ports can be suspicious)
-            feature_vec.append(1 if port > 49152 else 0)
+            feature_vec.append(1 if port is not None and port > 49152 else 0)
             
             # 4. Non-standard port for type
             ioc_type = ioc.get("type", "")
@@ -69,24 +65,29 @@ class AnomalyDetector:
                 "malware_download": [80, 443, 8080],
             }
             
-            if port and threat_type in standard_ports:
+            if port is not None and threat_type in standard_ports:
                 feature_vec.append(0 if port in standard_ports[threat_type] else 1)
             else:
                 feature_vec.append(0)
             
             # 5. Confidence score (low confidence = potentially anomalous)
-            confidence = ioc.get("confidence_score", 50)
-            feature_vec.append(1 - (confidence / 100))
+            confidence = ioc.get("confidence_score")
+            if confidence is not None:
+                feature_vec.append(1 - (confidence / 100))
+            else:
+                feature_vec.append(0.5)  # Default middle value
             
             # 6. IP-specific features
             value = str(ioc.get("value", ""))
             if ioc_type == "ipv4":
                 octets = value.split(".")
                 if len(octets) == 4:
-                    # Unusual first octet ranges
-                    first_octet = int(octets[0])
-                    unusual_ranges = list(range(0, 10)) + list(range(224, 256))
-                    feature_vec.append(1 if first_octet in unusual_ranges else 0)
+                    try:
+                        first_octet = int(octets[0])
+                        unusual_ranges = list(range(0, 10)) + list(range(224, 256))
+                        feature_vec.append(1 if first_octet in unusual_ranges else 0)
+                    except ValueError:
+                        feature_vec.append(0)
                 else:
                     feature_vec.append(0)
             else:
@@ -95,13 +96,12 @@ class AnomalyDetector:
             # 7. Domain entropy (high entropy = DGA-like)
             if ioc_type == "domain":
                 entropy = self._calculate_entropy(value)
-                feature_vec.append(min(entropy / 4, 1))  # Normalize
+                feature_vec.append(min(entropy / 4, 1))
             else:
                 feature_vec.append(0)
             
             # 8. Domain length anomaly
             if ioc_type == "domain":
-                # Very long or very short domains can be suspicious
                 length = len(value)
                 if length < 5 or length > 40:
                     feature_vec.append(1)
@@ -111,8 +111,8 @@ class AnomalyDetector:
                 feature_vec.append(0)
             
             # 9. Numeric domain (DGA indicator)
-            if ioc_type == "domain":
-                num_ratio = sum(c.isdigit() for c in value) / len(value) if value else 0
+            if ioc_type == "domain" and value:
+                num_ratio = sum(c.isdigit() for c in value) / len(value)
                 feature_vec.append(num_ratio)
             else:
                 feature_vec.append(0)
@@ -146,33 +146,23 @@ class AnomalyDetector:
         self.is_fitted = True
     
     def detect(self, iocs: List[Dict]) -> List[Dict]:
-        """
-        Detect anomalies in IOCs
-        
-        Returns IOCs with anomaly scores and labels
-        """
+        """Detect anomalies in IOCs"""
         
         if not self.is_fitted:
-            # Fit on the same data if not fitted
             self.fit(iocs)
         
         features = self.extract_features(iocs)
         features_scaled = self.scaler.transform(features)
         
-        # Get predictions (-1 = anomaly, 1 = normal)
         predictions = self.model.predict(features_scaled)
-        
-        # Get anomaly scores (lower = more anomalous)
         scores = self.model.decision_function(features_scaled)
         
-        # Normalize scores to 0-100 (higher = more anomalous)
         min_score, max_score = scores.min(), scores.max()
         if max_score > min_score:
             normalized_scores = 100 * (1 - (scores - min_score) / (max_score - min_score))
         else:
             normalized_scores = np.full_like(scores, 50)
         
-        # Add results to IOCs
         for i, ioc in enumerate(iocs):
             ioc["anomaly"] = {
                 "is_anomaly": predictions[i] == -1,
@@ -214,29 +204,17 @@ if __name__ == "__main__":
     print("Anomaly Detector - Testing")
     print("=" * 60)
     
-    # Test IOCs - mix of normal and anomalous
     test_iocs = [
-        # Normal C2 activity
         {"type": "ipv4", "value": "45.33.32.156", "source": "feodotracker", "threat_type": "botnet_c2", "port": 443, "confidence_score": 85, "malware": "Emotet"},
         {"type": "ipv4", "value": "162.243.103.246", "source": "feodotracker", "threat_type": "botnet_c2", "port": 8080, "confidence_score": 90, "malware": "Emotet"},
         {"type": "ipv4", "value": "185.220.101.34", "source": "threatfox", "threat_type": "botnet_c2", "port": 443, "confidence_score": 80, "malware": "QakBot"},
-        
-        # Normal phishing
         {"type": "url", "value": "http://fake-bank.com/login", "source": "openphish", "threat_type": "phishing", "confidence_score": 75},
         {"type": "domain", "value": "secure-paypal.xyz", "source": "openphish", "threat_type": "phishing", "confidence_score": 70},
-        
-        # Normal malware
         {"type": "sha256", "value": "a" * 64, "source": "malwarebazaar", "threat_type": "malware", "confidence_score": 85, "malware": "Mirai"},
         {"type": "sha256", "value": "b" * 64, "source": "malwarebazaar", "threat_type": "malware", "confidence_score": 80, "malware": "Mirai"},
-        
-        # ANOMALIES
-        # Unusual port
         {"type": "ipv4", "value": "192.0.2.100", "source": "feodotracker", "threat_type": "botnet_c2", "port": 31337, "confidence_score": 40},
-        # DGA-like domain (high entropy, numeric)
         {"type": "domain", "value": "x7k9m2p4q8.xyz", "source": "alienvault_otx", "threat_type": "malware", "confidence_score": 30},
-        # Unknown source, low confidence
         {"type": "ipv4", "value": "198.51.100.50", "source": "unknown", "threat_type": "botnet_c2", "port": 65000, "confidence_score": 20},
-        # Very long domain
         {"type": "domain", "value": "this-is-a-very-long-suspicious-domain-name-that-looks-malicious.tk", "source": "threatfox", "threat_type": "phishing", "confidence_score": 25},
     ]
     
@@ -247,17 +225,7 @@ if __name__ == "__main__":
     print(f"Anomalies found: {analysis['anomalies_found']}")
     print(f"Anomaly rate: {analysis['anomaly_rate']}%")
     
-    print("\n" + "-" * 60)
-    print("Top Anomalies:")
-    print("-" * 60)
-    
+    print("\nTop Anomalies:")
     for ioc in analysis["top_anomalies"][:5]:
         anomaly = ioc.get("anomaly", {})
-        print(f"\n  [{ioc['type']}] {ioc['value'][:40]}")
-        print(f"    Anomaly Score: {anomaly.get('anomaly_score')}/100")
-        print(f"    Source: {ioc.get('source')}, Port: {ioc.get('port', 'N/A')}")
-        print(f"    Confidence: {ioc.get('confidence_score', 'N/A')}")
-    
-    print("\n" + "-" * 60)
-    print(f"Anomalies by type: {dict(analysis['anomaly_by_type'])}")
-    print(f"Anomalies by source: {dict(analysis['anomaly_by_source'])}")
+        print(f"  [{ioc['type']}] {ioc['value'][:40]} - Score: {anomaly.get('anomaly_score')}")
