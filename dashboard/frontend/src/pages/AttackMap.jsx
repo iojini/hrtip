@@ -1,114 +1,100 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { useState, useEffect } from 'react'
+import { API_BASE } from '../App'
 
-const TACTICS_ORDER = [
-  'Reconnaissance', 'Resource Development', 'Initial Access', 'Execution',
-  'Persistence', 'Privilege Escalation', 'Defense Evasion', 'Credential Access',
-  'Discovery', 'Lateral Movement', 'Collection', 'Command and Control',
-  'Exfiltration', 'Impact'
+const TACTICS = [
+  'reconnaissance', 'resource_development', 'initial_access', 'execution',
+  'persistence', 'privilege_escalation', 'defense_evasion', 'credential_access',
+  'discovery', 'lateral_movement', 'collection', 'command_and_control', 'exfiltration', 'impact'
 ]
 
-const TECHNIQUE_NAMES = {
-  'T1071.001': 'App Layer Protocol: Web',
-  'T1566.001': 'Spearphishing Attachment',
-  'T1055': 'Process Injection',
-  'T1573': 'Encrypted Channel',
-  'T1059.001': 'PowerShell',
-  'T1547.001': 'Registry Run Keys',
-  'T1105': 'Ingress Tool Transfer',
-  'T1059.004': 'Unix Shell',
-  'T1110.001': 'Password Guessing',
-  'T1571': 'Non-Standard Port',
-}
+export default function AttackMap() {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-export default function AttackMap({ data }) {
-  if (!data) return null
-  const { mitre_summary } = data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const apiUrl = API_BASE ? `${API_BASE}/dashboard-data` : '/api/dashboard-data'
+        const response = await fetch(apiUrl)
+        const result = await response.json()
+        setData(result)
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
 
-  const tacticMap = {}
-  for (const [name, count] of (mitre_summary.top_tactics || [])) {
-    tacticMap[name] = count
-  }
+  if (loading) return <div className="p-6 text-gray-400">Loading ATT&CK data...</div>
 
-  const techData = (mitre_summary.top_techniques || []).map(([id, count]) => ({
-    id, name: TECHNIQUE_NAMES[id] || id, count
-  }))
-
-  const maxTacticCount = Math.max(...Object.values(tacticMap), 1)
-
-  const getHeatColor = (count) => {
-    if (!count) return 'bg-gray-800/50 border-gray-800'
-    const intensity = count / maxTacticCount
-    if (intensity > 0.7) return 'bg-red-500/30 border-red-500/40 text-red-300'
-    if (intensity > 0.4) return 'bg-amber-500/20 border-amber-500/30 text-amber-300'
-    return 'bg-cyan-500/15 border-cyan-500/20 text-cyan-300'
-  }
-
-  const getMitreUrl = (id) => {
-    return 'https://attack.mitre.org/techniques/' + id.replace('.', '/') + '/'
-  }
+  const mitre = data?.mitre_summary || {}
+  const tacticCounts = Object.fromEntries(mitre.top_tactics || [])
+  const techniques = mitre.top_techniques || []
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-white">MITRE ATT&CK Coverage</h2>
-        <p className="text-sm text-gray-500">
-          {mitre_summary.unique_techniques} techniques across {mitre_summary.unique_tactics} tactics
-        </p>
+        <h1 className="text-2xl font-bold text-white">MITRE ATT&CK Map</h1>
+        <p className="text-gray-400">Threat coverage across the kill chain</p>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">Kill Chain Heatmap</h3>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <p className="text-gray-400 text-sm">Techniques Mapped</p>
+          <p className="text-3xl font-bold text-white">{mitre.unique_techniques || 0}</p>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <p className="text-gray-400 text-sm">Tactics Covered</p>
+          <p className="text-3xl font-bold text-white">{mitre.unique_tactics || 0}</p>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <p className="text-gray-400 text-sm">Kill Chain Coverage</p>
+          <p className="text-3xl font-bold text-white">{Math.round((mitre.kill_chain_coverage || 0) * 100)}%</p>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <p className="text-gray-400 text-sm">IOCs Mapped</p>
+          <p className="text-3xl font-bold text-white">{mitre.total_iocs_mapped || 0}</p>
+        </div>
+      </div>
+
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <h3 className="text-white font-semibold mb-4">Kill Chain Heatmap</h3>
         <div className="grid grid-cols-7 gap-2">
-          {TACTICS_ORDER.map(tactic => {
-            const count = tacticMap[tactic] || 0
+          {TACTICS.map(tactic => {
+            const count = tacticCounts[tactic] || 0
+            const intensity = Math.min(count / 50, 1)
             return (
-              <div key={tactic} className={'border rounded-lg p-3 text-center ' + getHeatColor(count)}>
-                <div className="text-[10px] font-medium leading-tight mb-1">{tactic}</div>
-                <div className="text-lg font-bold">{count || '-'}</div>
+              <div
+                key={tactic}
+                className="p-3 rounded-lg text-center"
+                style={{ backgroundColor: `rgba(239, 68, 68, ${0.2 + intensity * 0.8})` }}
+              >
+                <p className="text-xs text-gray-300 truncate">{tactic.replace('_', ' ')}</p>
+                <p className="text-xl font-bold text-white">{count}</p>
               </div>
             )
           })}
         </div>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">Top Techniques</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={techData} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis type="number" stroke="#6b7280" tick={{ fontSize: 11 }} />
-            <YAxis type="category" dataKey="name" stroke="#6b7280" tick={{ fontSize: 11 }} width={180} />
-            <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }} />
-            <Bar dataKey="count" fill="#ef4444" radius={[0, 4, 4, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-800">
-              <th className="text-left px-4 py-3 text-xs text-gray-500 uppercase">Technique ID</th>
-              <th className="text-left px-4 py-3 text-xs text-gray-500 uppercase">Name</th>
-              <th className="text-left px-4 py-3 text-xs text-gray-500 uppercase">Count</th>
-              <th className="text-left px-4 py-3 text-xs text-gray-500 uppercase">Reference</th>
-            </tr>
-          </thead>
-          <tbody>
-            {techData.map((tech, i) => (
-              <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                <td className="px-4 py-2.5 text-sm font-mono text-cyan-400">{tech.id}</td>
-                <td className="px-4 py-2.5 text-sm text-gray-300">{tech.name}</td>
-                <td className="px-4 py-2.5 text-sm text-gray-400">{tech.count}</td>
-                <td className="px-4 py-2.5">
-                  <a href={getMitreUrl(tech.id)} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-500 hover:text-cyan-400">
-                    MITRE
-                  </a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <h3 className="text-white font-semibold mb-4">Top Techniques</h3>
+        <div className="space-y-2">
+          {techniques.slice(0, 10).map(([techId, count]) => (
+            <div key={techId} className="flex items-center gap-4">
+              <span className="text-cyan-400 font-mono w-24">{techId}</span>
+              <div className="flex-1 bg-gray-700 rounded-full h-4">
+                <div
+                  className="bg-red-500 h-4 rounded-full"
+                  style={{ width: `${(count / (techniques[0]?.[1] || 1)) * 100}%` }}
+                ></div>
+              </div>
+              <span className="text-gray-400 w-12 text-right">{count}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
