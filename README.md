@@ -7,7 +7,7 @@ A production-ready threat intelligence platform that aggregates, analyzes, and v
 [![React](https://img.shields.io/badge/react-18-61dafb)](https://reactjs.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-🌐 **[Live Demo](https://nexus-cti.vercel.app)** | 📡 **[API](https://hrtip.onrender.com/health)**
+🌐 **[Live Demo](https://nexus-cti.vercel.app)** | 📡 **[API](https://nexus-erqb.onrender.com/health)**
 
 ---
 
@@ -146,7 +146,7 @@ Visit `http://localhost:5173` to view the dashboard.
 
 ### Example Request
 ```bash
-curl https://hrtip.onrender.com/dashboard-data | jq
+curl https://nexus-erqb.onrender.com/dashboard-data | jq
 ```
 
 ---
