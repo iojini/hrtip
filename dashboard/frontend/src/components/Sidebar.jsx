@@ -1,14 +1,15 @@
+import { NavLink } from 'react-router-dom'
 import { Shield, LayoutDashboard, Table, Grid3X3, Network, Radio } from 'lucide-react'
 
 const navItems = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'iocs', label: 'IOC Database', icon: Table },
-  { id: 'attack-map', label: 'ATT&CK Map', icon: Grid3X3 },
-  { id: 'campaigns', label: 'Campaigns', icon: Network },
-  { id: 'feeds', label: 'Feed Status', icon: Radio },
+  { path: '/', label: 'Overview', icon: LayoutDashboard },
+  { path: '/iocs', label: 'IOC Database', icon: Table },
+  { path: '/attack-map', label: 'ATT&CK Map', icon: Grid3X3 },
+  { path: '/campaigns', label: 'Campaigns', icon: Network },
+  { path: '/feeds', label: 'Feed Status', icon: Radio },
 ]
 
-export default function Sidebar({ currentPage, onNavigate }) {
+export default function Sidebar() {
   return (
     <div className="w-56 bg-gray-900 border-r border-gray-800 flex flex-col">
       <div className="p-4 border-b border-gray-800">
@@ -20,28 +21,27 @@ export default function Sidebar({ currentPage, onNavigate }) {
           </div>
         </div>
       </div>
-
       <nav className="flex-1 p-2 space-y-1">
         {navItems.map(item => {
           const Icon = item.icon
-          const active = currentPage === item.id
           return (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
-                active
-                  ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-white border border-transparent'
-              }`}
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) =>
+                `w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
+                  isActive
+                    ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                    : 'text-gray-400 hover:bg-gray-800 hover:text-white border border-transparent'
+                }`
+              }
             >
               <Icon className="w-4 h-4" />
               {item.label}
-            </button>
+            </NavLink>
           )
         })}
       </nav>
-
       <div className="p-3 border-t border-gray-800">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
