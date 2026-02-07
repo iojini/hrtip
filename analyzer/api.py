@@ -20,7 +20,7 @@ from processor.scorer import IOCDeduplicator
 from processor.mitre_mapper import MITREMapper
 
 app = FastAPI(
-    title="HRTIP ML API",
+    title="Nexus API",
     description="Healthcare & Retail Threat Intelligence Platform - ML Model Serving API",
     version="1.0.0"
 )
@@ -69,7 +69,7 @@ def get_iocs_from_db():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "HRTIP ML API"}
+    return {"status": "healthy", "service": "Nexus API"}
 
 
 @app.get("/dashboard-data")
@@ -201,5 +201,5 @@ async def get_stats():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
-    print(f"Starting HRTIP ML API Server on port {port}...")
+    print(f"Starting Nexus API Server on port {port}...")
     uvicorn.run(app, host="0.0.0.0", port=port)
