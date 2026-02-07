@@ -63,13 +63,13 @@ ML-powered clustering identifies related threat activity and potential coordinat
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     COLLECTOR LAYER                             │
-│  Feed Parsers → Normalizer → Deduplicator → Confidence Scorer  │
+│  Feed Parsers → Normalizer → Deduplicator → Confidence Scorer   │
 └─────────────────────────┬───────────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     ANALYSIS ENGINE                             │
-│  MITRE Mapper │ Threat Clusterer │ Anomaly Detector │ Enricher │
+│  MITRE Mapper │ Threat Clusterer │ Anomaly Detector │ Enricher  │
 └─────────────────────────┬───────────────────────────────────────┘
                           │
                           ▼
@@ -198,4 +198,4 @@ MIT License - feel free to use this project for learning or as a portfolio piece
 
 ---
 
-*Built with ☕ and a passion for cybersecurity*
+*Built with ❤️ and a passion for cybersecurity*
